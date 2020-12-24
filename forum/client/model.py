@@ -1,4 +1,5 @@
 from socket import *
+from typing import *
 from forum.common.packet import *
 
 
@@ -44,14 +45,14 @@ class Model:
     def authenticate(self, login: str, passwd: str) -> int:
         return self._register_authenticate(PacketType.AUTHENTICATION, login, passwd)
 
-    def get_topics(self, t_from=0, t_to=2**32-1) -> list[PacketData]:
+    def get_topics(self, t_from=0, t_to=2**32-1) -> List[PacketData]:
         packet = self._get_header(PacketType.GET_TOPICS)
         packet.data.append(PacketData(
             dtype=DataType.RANGE, r_from=t_from, r_to=t_to))
         answer = self._talk_with_server(packet)
         return answer.data
 
-    def get_messages(self, tid: int, m_from=0, m_to=2**32-1) -> list[PacketData]:
+    def get_messages(self, tid: int, m_from=0, m_to=2**32-1) -> List[PacketData]:
         packet = self._get_header(PacketType.GET_MESSAGES)
         packet.tid = tid
         packet.data.append(PacketData(
@@ -72,7 +73,7 @@ class Model:
         answer = self._talk_with_server(packet)
         return answer.data[-1]
 
-    def get_users(self) -> list[str]:
+    def get_users(self) -> List[str]:
         packet = self._get_header(6)
         answer = self._talk_with_server(packet)
         return [d.s1 + d.s2 for d in answer.data]

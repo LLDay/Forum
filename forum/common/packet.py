@@ -151,17 +151,18 @@ class PacketHeader:
             self.tid = int.from_bytes(data[9:13], "big")
             data = data[13:]
 
-            for i in range(data_size):
+            for _ in range(data_size):
+                if len(data) == 0:
+                    return
+
                 packet_data = PacketData(data=data)
-                self.data.append(packet_data)
-
-                if len(data) - len(packet_data) < 0:
-                    break
-                else:
+                if packet_data.build:
+                    self.data.append(packet_data)
                     data = data[len(packet_data):]
+                else:
+                    return
 
-            all_builded = all([o.build for o in self.data])
-            self.build = all_builded and data_size == len(data)
+            self.build = data_size == len(self.data)
 
     def __len__(self) -> int:
         return 13 + sum(len(d) for d in self.data)

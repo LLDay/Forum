@@ -1,6 +1,4 @@
 import sys
-from forum.client.model import Model
-from forum.common.packet import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 
@@ -11,7 +9,7 @@ def _get_string_time(time_since_epoch: int) -> str:
 
 
 class Topic(QWidget):
-    def __init__(self, tid: int, topic: PacketData):
+    def __init__(self, tid: int, topic):
         QWidget.__init__(self)
         self.creation_time = topic.getTime()
         self.author = topic.s1
@@ -38,7 +36,7 @@ class Topic(QWidget):
 
 
 class Message(QWidget):
-    def __init__(self, mid: int, message: PacketData):
+    def __init__(self, mid: int, message):
         QWidget.__init__(self)
         self.creation_time = message.getTime()
         self.author = message.s1
@@ -62,7 +60,7 @@ class Message(QWidget):
 
 
 class MessagePanel(QGroupBox):
-    def __init__(self, model: Model):
+    def __init__(self, model):
         QGroupBox.__init__(self)
         self.model = model
 
@@ -107,7 +105,7 @@ class MessagePanel(QGroupBox):
 
 
 class TopicPanel(QGroupBox):
-    def __init__(self, model: Model):
+    def __init__(self, model):
         QGroupBox.__init__(self)
         self.model = model
         self.message_panel = MessagePanel(self.model)
@@ -147,7 +145,7 @@ class TopicPanel(QGroupBox):
 
 
 class UsersPanel(QGroupBox):
-    def __init__(self, model: Model):
+    def __init__(self, model):
         QGroupBox.__init__(self)
         self.model = model
         self.users = QListWidget(self)
@@ -164,7 +162,7 @@ class UsersPanel(QGroupBox):
 
 
 class Client(QWidget):
-    def __init__(self, model: Model):
+    def __init__(self, model):
         QWidget.__init__(self)
         self.model = model
 
@@ -203,7 +201,7 @@ class Client(QWidget):
 
 
 class Authentication(QDialog):
-    def __init__(self, model: Model):
+    def __init__(self, model):
         QDialog.__init__(self)
         self.model = model
         self.setWindowTitle("Authentication")

@@ -10,7 +10,6 @@ def main():
 
     window = Authentication(model)
     window.show()
-    window.exec()
 
     sys.exit(app.exec_())
 

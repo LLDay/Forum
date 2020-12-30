@@ -1,5 +1,4 @@
 import enum
-import select
 import threading
 import time
 
@@ -8,55 +7,47 @@ from typing import List
 
 from forum.client.gui import Client, Message, Topic
 from forum.common.packet import PacketHeader, PacketData, PacketType, Status
+from forum.common.events_listener import EventListener
 
 
 class Model:
     def __init__(self, ip: str, port: int, timeout_sec=0.5):
-        self.working = False
-        self.gui = None
-
+        self.gui = Client(self)
         self._ip = ip
         self._port = port
-        self.sock = socket(AF_INET, SOCK_STREAM, 0)
-
+        self.sock = None
         self.cid = 0
         self.tid = 0
         self.timeout = timeout_sec
+        self.events = EventListener([])
+        self.events.add_incoming_packet_handler(self._on_incoming_packet)
+        self.connect()
 
-        self._connect_read = threading.Thread(
+    def connect(self):
+        connect_thread = threading.Thread(
             target=self._connect_loop, daemon=True)
-        self._connect_read.start()
+        connect_thread.start()
 
     def _connect_loop(self):
-        while self.working:
+        while True:
             try:
                 self.sock = socket(AF_INET, SOCK_STREAM, 0)
                 self.sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 self.sock.connect((self._ip, self._port))
-                self.request_topics()
-                self.requeist_users()
-                self._read_loop()
+                break
             except ConnectionRefusedError:
                 self.gui.setStatus("Unable to connect to the server")
                 time.sleep(1)
+        self._on_client_connected()
 
-    def _read_loop(self):
-        self.gui.setStatus()
-        data = []
-        while self.working:
-            r, w, e = select.select([self.sock], [], [self.sock], self.timeout)
-            if len(e) > 0:
-                self.working = False
-                continue
+    def _on_client_connected(self):
+        self.request_topics()
+        self.requeist_users()
+        self.events.add_socket(self.sock)
 
-            read = [-1]
-            while len(read) > 0:
-                read = r[0].recv(1024)
-                data.append(read)
-                packet = PacketHeader(data=read)
-                if packet.build:
-                    data = data[len(packet):]
-                    self._on_incoming_packet(packet)
+    def _on_client_disconencted(self, sock):
+        sock.close()
+        connect()
 
     def _get_header(self, ptype: PacketType) -> PacketHeader:
         return PacketHeader(ptype=ptype, cid=self.cid, source=0)
@@ -65,7 +56,7 @@ class Model:
         self.sock.sendall(packet.raw())
 
     def is_user_entered(self) -> bool:
-        return self.cid != -1
+        return self.cid != 0
 
     def _register_authenticate(self, ptype: PacketType, login: str, passwd: str):
         packet = self._get_header(ptype)
@@ -114,7 +105,6 @@ class Model:
                 self.cid = packet.cid
                 self.gui.show()
                 self.working = True
-                self.gui = Client(self)
 
     def request_topics(self, t_from=0, t_to=2**32-1):
         self.gui.topic_panel.clear_topics()

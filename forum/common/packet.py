@@ -32,7 +32,7 @@ class PacketData:
         self.s2 = s2
         self.tfts = 0
         self._range_shift = 2 ** 32
-        self.build = True
+        self.built = True
 
         if self.type is DataType.STRING:
             self.setTime(time)
@@ -43,7 +43,7 @@ class PacketData:
             self.setStatus(status)
 
         if data is not None:
-            self.build = False
+            self.built = False
 
             if len(data) < self.__len__():
                 return
@@ -61,7 +61,7 @@ class PacketData:
                 return
             self.s2 = data[17 + size1:17 + size1 + size2].decode("UTF-8")
 
-            self.build = True
+            self.built = True
 
     def __len__(self) -> int:
         return 17 + len(self.s1) + len(self.s2)
@@ -136,10 +136,10 @@ class PacketHeader:
         self.cid = cid
         self.tid = tid
         self.data = []
-        self.build = True
+        self.built = True
 
         if data is not None:
-            self.build = False
+            self.built = False
             if (len(data) < self.__len__()):
                 return
 
@@ -156,13 +156,13 @@ class PacketHeader:
                     return
 
                 packet_data = PacketData(data=data)
-                if packet_data.build:
+                if packet_data.built:
                     self.data.append(packet_data)
                     data = data[len(packet_data):]
                 else:
                     return
 
-            self.build = data_size == len(self.data)
+            self.built = data_size == len(self.data)
 
     def __len__(self) -> int:
         return 13 + sum(len(d) for d in self.data)

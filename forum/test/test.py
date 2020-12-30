@@ -35,7 +35,7 @@ def generate_packet() -> PacketHeader:
 def test_completness(repeats=10):
     for _ in range(repeats):
         packet = generate_packet()
-        assert packet.build
+        assert packet.built
 
         packet_raw = packet.raw()
         partial_data = bytearray()
@@ -45,13 +45,13 @@ def test_completness(repeats=10):
             partial_data.append(byte)
 
         complete_packet = PacketHeader(data=packet_raw)
-        assert complete_packet.build
+        assert complete_packet.built
 
         for _ in range(randint(0, 1024)):
             partial_data.append(randint(0, 255))
 
         complete_packet = PacketHeader(data=partial_data)
-        assert complete_packet.build
+        assert complete_packet.built
         assert len(complete_packet) == len(packet)
 
 
@@ -65,7 +65,7 @@ def test_serialization(repeats=10):
         assert packet.type == tested_packet.type
         assert packet.tid == tested_packet.tid
         assert packet.cid == tested_packet.cid
-        assert packet.build == tested_packet.build
+        assert packet.built == tested_packet.built
         assert len(packet.data) == len(tested_packet.data)
         assert len(packet) == len(tested_packet)
         assert len(raw) == len(packet)
@@ -75,7 +75,7 @@ def test_serialization(repeats=10):
             assert pd.s1 == td.s1
             assert pd.s2 == td.s2
             assert pd.tfts == td.tfts
-            assert pd.build == td.build
+            assert pd.built == td.built
 
 
 if __name__ == "__main__":

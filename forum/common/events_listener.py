@@ -7,13 +7,17 @@ from forum.common.packet import PacketHeader
 
 class EventListener:
     def __init__(self, timeout=0.5):
+        print("ok")
         self.sockets = []
         self.timeout = timeout
-        self.lock = threading.Lock()
-        self.thread = threading.Thread(target=self._get_packets, daemon=True)
+
+        self._working = True
         self._disconnect_listeners = []
         self._read_listeners = []
-        self._working = True
+
+        self.lock = threading.Lock()
+        self.thread = threading.Thread(target=self._get_packets, daemon=True)
+        self.thread.start()
 
     def add_socket(self, socket):
         with self.lock:

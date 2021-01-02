@@ -19,7 +19,7 @@ class Model:
         self.cid = 0
         self.tid = 0
         self.timeout = timeout_sec
-        self.events = EventListener([])
+        self.events = EventListener()
         self.events.add_incoming_packet_handler(self._on_incoming_packet)
         self.connect()
 

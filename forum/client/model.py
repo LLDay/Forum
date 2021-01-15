@@ -2,12 +2,12 @@ import enum
 import threading
 import time
 
-from socket import *
 from typing import List
 
+from forum.client.connection import ServerConnection
+from forum.client.events_listener import EventListener
 from forum.client.gui import Client, Message, Topic
-from forum.common.packet import PacketHeader, PacketData, PacketType, Status
-from forum.common.events_listener import EventListener
+from forum.common.packet import PacketHeader, PacketData, PacketType, Status, DataType
 
 
 class Model:
@@ -15,53 +15,42 @@ class Model:
         self.gui = Client(self)
         self._ip = ip
         self._port = port
-        self.sock = None
         self.cid = 0
         self.tid = 0
         self.timeout = timeout_sec
+
         self.events = EventListener()
         self.events.add_incoming_packet_handler(self._on_incoming_packet)
-        self.connect()
+        self.events.add_disconnect_handler(self._on_client_disconnected)
 
-    def connect(self):
-        connect_thread = threading.Thread(
-            target=self._connect_loop, daemon=True)
-        connect_thread.start()
-
-    def _connect_loop(self):
-        while True:
-            try:
-                self.sock = socket(AF_INET, SOCK_STREAM, 0)
-                self.sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-                self.sock.connect((self._ip, self._port))
-                break
-            except ConnectionRefusedError:
-                self.gui.setStatus("Unable to connect to the server")
-                time.sleep(1)
-        self._on_client_connected()
+        self.connection = ServerConnection(self)
+        self.connection.add_connection_handler(self._on_client_connected)
+        self.connection.add_error_handler(self._on_connection_error)
+        self.connection.connect()
 
     def _on_client_connected(self):
         self.request_topics()
-        self.requeist_users()
-        self.events.add_socket(self.sock)
+        self.request_users()
+        self.events.add_socket(self.connection.sock)
 
-    def _on_client_disconencted(self, sock):
+    def _on_client_disconnected(self, sock: socket):
         sock.close()
-        connect()
+        self.events.remove_socket(sock)
+        self.connection.connect()
+
+    def _on_connection_error(self, description: str):
+        self.gui.setStatus(description)
 
     def _get_header(self, ptype: PacketType) -> PacketHeader:
         return PacketHeader(ptype=ptype, cid=self.cid, source=0)
-
-    def _send_to_server(self, packet: PacketHeader):
-        self.sock.sendall(packet.raw())
 
     def is_user_entered(self) -> bool:
         return self.cid != 0
 
     def _register_authenticate(self, ptype: PacketType, login: str, passwd: str):
         packet = self._get_header(ptype)
-        packet.data.append(PacketData(s1=login, s2=passwd))
-        self._send_to_server(packet)
+        packet.add_data_field(PacketData(s1=login, s2=passwd))
+        self.connection.send(packet)
 
     def register(self, login: str, passwd: str):
         self._register_authenticate(
@@ -78,7 +67,7 @@ class Model:
                    PacketType.ADD_TOPIC: self._on_receive_topics,
                    PacketType.GET_MESSAGES: self._on_receive_messages,
                    PacketType.ADD_MESSAGE: self._on_receive_messages,
-                   Packet.Type.GET_USERS: self._on_receive_users}[packet.type]
+                   PacketType.GET_USERS: self._on_receive_users}[packet.type]
         handler(packet)
 
     def _on_receive_topics(self, packet: PacketHeader):
@@ -109,9 +98,9 @@ class Model:
     def request_topics(self, t_from=0, t_to=2**32-1):
         self.gui.topic_panel.clear_topics()
         packet = self._get_header(PacketType.GET_TOPICS)
-        packet.data.append(PacketData(
+        packet.add_data_field(PacketData(
             dtype=DataType.RANGE, r_from=t_from, r_to=t_to))
-        self._send_to_server(packet)
+        self.connection.send(packet)
 
     def request_messages(self, tid: int, m_from=0, m_to=2**32-1):
         self.gui.topic_panel.message_panel.clear_messages()
@@ -120,19 +109,19 @@ class Model:
         packet.data.append(PacketData(
             dtype=DataType.RANGE, r_from=m_from, r_to=m_to))
         self.tid = tid
-        self._send_to_server(packet)
+        self.connection.send(packet)
 
-    def requeist_users(self):
+    def request_users(self):
         packet = self._get_header(6)
-        self._send_to_server(packet)
+        self.connection.send(packet)
 
     def add_topic(self, name: str):
         packet = self._get_header(PacketType.ADD_TOPIC)
-        packet.data.append(PacketData(s1=name))
-        self._send_to_server(packet)
+        packet.add_data_field(PacketData(s1=name))
+        self.connection.send(packet)
 
     def add_message(self, text: str):
         packet = self._get_header(PacketType.ADD_MESSAGE)
         packet.tid = self.tid
-        packet.data.append(PacketData(s1=text))
-        self._send_to_server(packet)
+        packet.add_data_field(PacketData(s1=text))
+        self.connection.send(packet)

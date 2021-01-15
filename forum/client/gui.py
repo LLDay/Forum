@@ -1,6 +1,7 @@
 import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from forum.common.packet import Status
 
 
 def _get_string_time(time_since_epoch: int) -> str:

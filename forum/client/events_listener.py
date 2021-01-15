@@ -28,7 +28,7 @@ class EventListener:
             self.sockets.remove(socket)
 
     # Excepts function accepted socket object as an argument
-    def add_disconnect_listeners(self, function):
+    def add_disconnect_handler(self, function):
         with self.lock:
             self._disconnect_listeners.append(function)
 

@@ -157,7 +157,7 @@ class PacketHeader:
 
                 packet_data = PacketData(data=data)
                 if packet_data.built:
-                    self.data.append(packet_data)
+                    self.add_data_field(packet_data)
                     data = data[len(packet_data):]
                 else:
                     return

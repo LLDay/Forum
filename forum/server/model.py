@@ -2,7 +2,7 @@ import enum
 import select
 import threading
 import time
-
+import datetime
 from socket import *
 from typing import List
 
@@ -12,6 +12,7 @@ from forum.common.packet import PacketHeader, PacketData, PacketType, Status, Da
 class Model:
     def __init__(self, clientSocket, packet: PacketHeader, cid, permission: bool, authors=[], topics=[], messages=[], users=[], tid=-1, usersToCids={}, usersToTids={}):
         packet.cid = cid
+        packet.source = 1
         self.cid = cid
         self.users_to_cids = usersToCids
         self.users_to_tids = usersToTids
@@ -63,7 +64,7 @@ class Model:
     def _on_send(self, array):
         self.packet.data.clear()
         for author, array_item in zip(self.authors, array):
-            self.packet.data.append(PacketData(dtype=DataType.STRING, s1=author, s2=array_item))
+            self.packet.data.append(PacketData(dtype=DataType.STRING, time=int(time.time()), s1=author, s2=array_item))
         #number_from = self.packet.data[0].r_from
         #number_to = self.packet.data[0].r_to
         #self.packet.data.clear()
@@ -82,7 +83,7 @@ class Model:
     def _on_send_users(self):
         self.packet.data.clear()
         for user in self.users:
-            self.packet.data.append(PacketData(dtype=DataType.STRING, s1=user, s2=user))
+            self.packet.data.append(PacketData(dtype=DataType.STRING, time=int(time.time()), s1=user))
 
     def _send_to_server(self):
         print("sended: ", self.packet)
@@ -91,13 +92,45 @@ class Model:
         #    for client_socket in self.clients:
         #        if (self.users_to_cids[self.clients[client_socket]] == self.cid):
         #            client_socket.send(self.packet.row())
+        if self.packet.type == PacketType.ADD_TOPIC:
+            self.packet.type = PacketType.GET_TOPICS
+            print("array: ", self.topics)
+            self._broadcast_data(array=self.topics)
+
         if self.packet.type == PacketType.ADD_MESSAGE:
             self.packet.type = PacketType.GET_MESSAGES
             self.packet.tid = self.tid
-            self.packet.data.clear()
-            for author, message in zip(self.authors, self.messages):
-                self.packet.data.append(PacketData(dtype=DataType.STRING, s1=author, s2=message))
-            print("send all: ", self.packet)
-            for client_socket in self.users_to_cids:
+            self._broadcast_data(array=self.messages)
+
+        if self.packet.type == PacketType.REGISTRATION:
+            self.packet.type = PacketType.GET_USERS
+            self._broadcast_data(array=self.users, is_registration=True)
+
+    def _broadcast_data(self, array, is_registration=False):
+        print("authors: ", self.authors)
+        print('array: ', array)
+        self.packet.data.clear()
+        if not is_registration:
+            for author, array in zip(self.authors, array):
+                self.packet.data.append(PacketData(dtype=DataType.STRING, time=int(time.time()), s1=author, s2=array))
+        else:
+            for user in self.users:
+                self.packet.data.append(PacketData(dtype=DataType.STRING, time=int(time.time()), s1=user))
+        self._broadcast()
+
+    def _broadcast(self):
+        for client_socket, cid in self.users_to_cids.items():
+            print('type: ', self.packet.type)
+            if self.packet.type == PacketType.GET_MESSAGES:
+                print(self.users_to_tids[client_socket])
+                print(self.tid)
                 if self.users_to_tids[client_socket] == self.tid:
+                    print("broadcast:", self.packet)
+                    client_socket.send(self.packet.raw())
+            elif self.packet.type == PacketType.GET_TOPICS:
+                print("broadcast:", self.packet)
+                client_socket.send(self.packet.raw())
+            elif self.packet.type == PacketType.GET_USERS:
+                if cid != self.cid:
+                    print("broadcast:", self.packet)
                     client_socket.send(self.packet.raw())

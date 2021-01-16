@@ -49,8 +49,10 @@ class ReceivingThread(Thread):
             if message is False:
                 print(f"Closed connection from client")
                 open_connection = False
+                #users_to_cids[self.notified_socket]
                 sockets_list.remove(self.notified_socket)
                 users_to_cids.pop(self.notified_socket, None)
+                #cids_to_login.pop(self.cid, None)
                 continue
             self._unparce_packet(message)
 
@@ -60,11 +62,45 @@ class ReceivingThread(Thread):
 
         permission = True
         if message.type == PacketType.REGISTRATION:#-
-            cids_to_login[self.cid] = {message.data[0].s1, message.data[0].s2}
-            Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission)
+            if message.data[0].s1 and message.data[0].s2:
+                data_entered = [message.data[0].s1, message.data[0].s2]
+                logins_returned = []
+                if data_entered in cids_to_login.values():
+                    permission = False
+                else:
+                    users = [data[0] for data in cids_to_login.values()]
+                    if data_entered[0] in users:
+                        permission = False
+                if permission:
+                    cids_to_login[self.cid] = data_entered
+                    logins_returned.append(data_entered[0])
+                    print("cids_to_login: ", cids_to_login)
+            else:
+                permission = False
+
+            Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission, users=logins_returned, usersToCids=users_to_cids)
 
         elif message.type == PacketType.AUTHENTICATION:#-
-            if (cids_to_login[self.cid] != {message.data[0].s1, message.data[0].s2}):
+            try:
+                permission = False
+                data_entered = [message.data[0].s1, message.data[0].s2]
+                if data_entered in cids_to_login.values():
+
+                    for cid, item in cids_to_login.items():
+                        if item == data_entered:
+                            permission = True
+                            cids_to_login.pop(cid, None)
+                            cids_to_login[self.cid] = [message.data[0].s1, message.data[0].s2]
+                            break
+#                    if item[0] == message.data[0].s1 and item[1] == message.data[0].s2:
+#                        permission = True
+#                        cids_to_login.pop(cid, None)
+#                        cids_to_login[self.cid] = [message.data[0].s1, message.data[0].s2]
+#                        break
+                    #if cids_to_login[self.cid][0] != message.data[0].s1 or cids_to_login[self.cid][1] != message.data[0].s2:
+                    #    permission = False
+            except:
+                print("can't sign in")
                 permission = False
             Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission)
 
@@ -86,7 +122,6 @@ class ReceivingThread(Thread):
                     authors_return.append(topics_to_authors[topic])
             else:
                 permission = False
-
             Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission, authors=authors_return,
                 topics=topics_return)
 
@@ -110,8 +145,10 @@ class ReceivingThread(Thread):
             #messages_to_authors["sjs"] = "author3"
             #messages_to_authors["aqq"] = "author4"
 
+            print("topics_to_messages: ", topics_to_messages)
+            print("tids_to_topics: ", tids_to_topics)
+            print("tid: ", self.tid)
             messages_for_topic = topics_to_messages[tids_to_topics[self.tid]]
-
 
             if r_from < len(messages_for_topic) and r_from <= r_to:
                 if r_to < len(messages_for_topic):
@@ -123,16 +160,30 @@ class ReceivingThread(Thread):
             else:
                 permission = False
 
+            print("messages_for_topic: ", messages_for_topic)
+
             Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission,
                 authors=authors_return, messages=messages_return, tid=self.tid)
 
         elif message.type == PacketType.ADD_TOPIC:#-
             #cids_to_login = {0: "fkfk"}
+            topics_return = []
+            authors_return = []
             for topic_item in message.data:
-                topics_to_authors[topic_item.s1] = cids_to_login[self.cid]
+                topics_return.append(topic_item.s1)
+                authors_return.append(cids_to_login[self.cid][0])
+                topics_to_authors[topic_item.s1] = cids_to_login[self.cid][0]
                 tids_to_topics[len(tids_to_topics)] = topic_item.s1
                 topics_to_messages[topic_item.s1] = []
-            Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission, tid=len(tids_to_topics)-1)
+
+            print("topics_to_authors: ", topics_to_authors)
+            print("tids_to_topics: ", tids_to_topics)
+            print("topics_to_messages: ", topics_to_messages)
+
+            print("topics_return: ", topics_return)
+            print("authors_return: ", authors_return)
+            Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission,
+                authors=authors_return, topics=topics_return, tid=len(tids_to_topics)-1, usersToCids=users_to_cids)
             #authors_return = []
             #messages_array = topics_to_messages[tids_to_topics[len(tids_to_topics)]]
             #for message_item in messages_array:
@@ -152,14 +203,19 @@ class ReceivingThread(Thread):
             for message_item in message.data:
                 topics_to_messages[tids_to_topics[message.tid]].append(message_item.s1)
                 messages_return.append(message_item.s1)
-                messages_to_authors[message_item.s1] = cids_to_login[self.cid]
-                authors_return.append(cids_to_login[self.cid])
+                messages_to_authors[message_item.s1] = cids_to_login[self.cid][0]
+                authors_return.append(cids_to_login[self.cid][0])
+
+            print("topics_to_messages: ", topics_to_messages)
+            print("messages_to_authors: ", messages_to_authors)
             Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission, authors=authors_return,
             messages=messages_return, tid=message.tid, usersToCids=users_to_cids, usersToTids=users_to_tids)
 
         elif (message.type == PacketType.GET_USERS):#-
-            users_return = cids_to_login.values()
+            users_return = [login[0] for login in cids_to_login.values()]
+            print("users_return: ", users_return)
             Model(clientSocket=self.notified_socket, packet=message, cid=self.cid, permission=permission, users=users_return)
+
 
 class Server:
     def __init__(self, ip, port):
@@ -169,10 +225,11 @@ class Server:
         self.server_socket.listen()
 
         sockets_list.append(self.server_socket)
-        print("here1")
+        #print("here1")
         socket_thread_created = []
         while True:
             read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
+            #print("1")
             for notified_socket in read_sockets:
                 if notified_socket == self.server_socket:
                     client_socket, client_address = self.server_socket.accept()

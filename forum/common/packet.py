@@ -32,7 +32,6 @@ class PacketData:
         self.s2 = s2
         self.tfts = 0
         self._range_shift = 2 ** 32
-        self.built = True
 
         if self.type is DataType.STRING:
             self.setTime(time)
@@ -43,25 +42,15 @@ class PacketData:
             self.setStatus(status)
 
         if data is not None:
-            self.built = False
-
-            if len(data) < self.__len__():
-                return
-
             self.type = DataType(data[0])
             self.tfts = int.from_bytes(data[1:9], "big")
 
             size1 = int.from_bytes(data[9:13], "big")
-            if len(data) < self.__len__() + size1:
-                return
             self.s1 = data[13:13 + size1].decode("UTF-8")
 
-            size2 = int.from_bytes(data[13 + size1:17 + size1], "big")
-            if len(data) < self.__len__() + size2:
-                return
-            self.s2 = data[17 + size1:17 + size1 + size2].decode("UTF-8")
-
-            self.built = True
+            data = data[13 + size1:]
+            size2 = int.from_bytes(data[:4], "big")
+            self.s2 = data[4:4 + size1].decode("UTF-8")
 
     def __len__(self) -> int:
         return 17 + len(self.s1) + len(self.s2)
@@ -73,7 +62,7 @@ class PacketData:
             s += f"  Time: {self.getTime()}\n"
         elif self.type is DataType.RANGE:
             s += f"  From: {self.getFrom()}\n"
-            s += f"    To: {self.getTo()}\n"
+            s += f"       To: {self.getTo()}\n"
         elif self.type is DataType.STATUS:
             s += f"  Stat: {self.tfts} ({Status(self.tfts).name})\n"
         s += f" Size1: {len(self.s1)}\n"
@@ -86,7 +75,6 @@ class PacketData:
         if self.type is not DataType.STRING:
             raise RuntimeError("The data doesn't have a time field")
         return self.tfts
-
     def setTime(self, time: int):
         self.tfts = time
         self.type = DataType.STRING
@@ -136,13 +124,7 @@ class PacketHeader:
         self.cid = cid
         self.tid = tid
         self.data = []
-        self.built = True
-
         if data is not None:
-            self.built = False
-            if (len(data) < self.__len__()):
-                return
-
             st = data[0]
             self.source = st // 128
             self.type = PacketType(st % 128)
@@ -150,19 +132,10 @@ class PacketHeader:
             data_size = int.from_bytes(data[5:9], "big")
             self.tid = int.from_bytes(data[9:13], "big")
             data = data[13:]
-
-            for _ in range(data_size):
-                if len(data) == 0:
-                    return
-
+            for i in range(data_size):
                 packet_data = PacketData(data=data)
-                if packet_data.built:
-                    self.data.append(packet_data)
-                    data = data[len(packet_data):]
-                else:
-                    return
-
-            self.built = data_size == len(self.data)
+                self.data.append(packet_data)
+                data = data[len(packet_data):]
 
     def __len__(self) -> int:
         return 13 + sum(len(d) for d in self.data)

@@ -204,6 +204,7 @@ class Authentication(QDialog):
     def __init__(self, model):
         QDialog.__init__(self)
         self.model = model
+
         self.setWindowTitle("Authentication")
         self.status = QLabel()
         self.status.setStyleSheet("QLabel {color: red;}")

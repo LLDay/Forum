@@ -5,7 +5,6 @@ import time
 from typing import List
 
 from forum.client.connection import ServerConnection
-from forum.client.events_listener import EventListener
 from forum.client.gui import Client, Message, Topic
 from forum.common.packet import PacketHeader, PacketData, PacketType, Status, DataType
 
@@ -19,23 +18,19 @@ class Model:
         self.tid = 0
         self.timeout = timeout_sec
 
-        self.events = EventListener()
-        self.events.add_incoming_packet_handler(self._on_incoming_packet)
-        self.events.add_disconnect_handler(self._on_client_disconnected)
-
-        self.connection = ServerConnection(self)
+        self.connection = ServerConnection()
+        self.connection.add_incoming_packet_handler(self._on_incoming_packet)
+        self.connection.add_disconnect_handler(self._on_client_disconnected)
         self.connection.add_connection_handler(self._on_client_connected)
         self.connection.add_error_handler(self._on_connection_error)
-        self.connection.connect()
+        self.connection.start()
 
     def _on_client_connected(self):
         self.request_topics()
         self.request_users()
         self.events.add_socket(self.connection.sock)
 
-    def _on_client_disconnected(self, sock: socket):
-        sock.close()
-        self.events.remove_socket(sock)
+    def _on_client_disconnected(self):
         self.connection.connect()
 
     def _on_connection_error(self, description: str):

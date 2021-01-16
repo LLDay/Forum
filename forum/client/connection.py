@@ -1,8 +1,10 @@
 import select
+import time
 import threading
 
 from collections.abc import Iterable
 from forum.common.packet import PacketHeader
+from socket import *
 
 
 class ServerConnection:
@@ -20,9 +22,9 @@ class ServerConnection:
         self._error_listeners = []
 
     def start(self):
-        self._start_connection()
         listen_thread = threading.Thread(target=self._get_packets, daemon=True)
         listen_thread.start()
+        self._start_connection()
 
     def _start_connection(self):
         connect_thread = threading.Thread(
@@ -36,11 +38,13 @@ class ServerConnection:
             sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
             try:
                 sock.connect((self.ip, self.port))
+                sock.setblocking(False)
                 break
-            except ConnectionRefusedError:
+            except:
                 with self.lock:
                     for handler in self._error_listeners:
                         handler("Unable to connect to the server")
+
             time.sleep(1)
 
         with self.lock:
@@ -48,9 +52,9 @@ class ServerConnection:
             for handler in self._connection_listeners:
                 handler()
 
-    def add_connection_handler(self, functino):
+    def add_connection_handler(self, function):
         with self.lock:
-            self._connection_listeners.append(func)
+            self._connection_listeners.append(function)
 
     def add_disconnect_handler(self, function):
         with self.lock:
@@ -63,7 +67,7 @@ class ServerConnection:
 
     def add_error_handler(self, function):
         with self.lock:
-            self.error_handler.append(func)
+            self._error_listeners.append(function)
 
     def _get_packets(self):
         buffer = bytearray()
@@ -78,19 +82,25 @@ class ServerConnection:
             r_sock, _, _ = select.select(sockets_copy, [], [], self.timeout)
 
             for socket in r_sock:
-                read_data = socket.recv(1024)
+                try:
+                    read_data = socket.recv(1024)
+                except:
+                    read_data = []
 
                 # Empty read means socket has disconnected
                 if len(read_data) == 0:
                     with self.lock:
                         for handler in self._disconnect_listeners:
-                            handler(socket)
+                            handler()
                         self.sockets = []
                         self._start_connection()
 
-                while len(read_data) > 0:
-                    buffer.append(read_data)
-                    read_data = socket.recv(1024)
+                while True:
+                    buffer.extend(read_data)
+                    try:
+                        read_data = socket.recv(1024)
+                    except:
+                        break
 
                 while True:
                     # Keep building until buffer has full packets
@@ -102,6 +112,15 @@ class ServerConnection:
                                 handler(packet)
                     else:
                         break
+
+    def send(self, packet):
+        if len(self.sockets) != 0:
+            print("SEND", packet)
+            self.sockets[0].sendall(packet.raw())
+        else:
+            with self.lock:
+                for handler in self._error_listeners:
+                    handler("Cannot send a packet to the server")
 
     def stop(self):
         with self.lock:

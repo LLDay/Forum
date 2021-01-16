@@ -1,7 +1,8 @@
 import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-from forum.common.packet import Status
+from PyQt5.Qt import Qt
+from forum.common.packet import Status, PacketData
 
 
 def _get_string_time(time_since_epoch: int) -> str:
@@ -97,19 +98,21 @@ class MessagePanel(QGroupBox):
     def clear_textbox(self):
         self.text_edit.clear()
 
-    def show_message(self, message: Message):
+    def show_message(self, mid: int, data: PacketData):
+        message = Message(mid, data)
         item = QListWidgetItem(self.messages)
-        item.setSizeHint(message_widget.sizeHint())
+        item.setSizeHint(message.sizeHint())
         item.setFlags(Qt.NoItemFlags)
         self.messages.addItem(item)
-        self.messages.setItemWidget(item, message_widget)
+        self.messages.setItemWidget(item, message)
 
 
 class TopicPanel(QGroupBox):
-    def __init__(self, model):
-        QGroupBox.__init__(self)
+    def __init__(self, model, parent=None):
+        super(TopicPanel, self).__init__(parent)
         self.model = model
         self.message_panel = MessagePanel(self.model)
+        self.message_panel.hide()
         self.setTitle("Topics")
 
         addTopicButton = QPushButton()
@@ -133,12 +136,15 @@ class TopicPanel(QGroupBox):
 
     def _open_topic(self, item: QListWidgetItem):
         topic = self.topics.itemWidget(item)
+        print(f"Get messages from topic with tid {topic.tid}")
         self.model.request_messages(topic.tid)
+        self.message_panel.show()
 
     def clear_topics(self):
         self.topics.clear()
 
-    def show_topic(self, topic: Topic):
+    def new_topic(self, tid: int, data: PacketData):
+        topic = Topic(tid, data)
         item = QListWidgetItem(self.topics)
         item.setSizeHint(topic.sizeHint())
         self.topics.addItem(item)
@@ -163,8 +169,8 @@ class UsersPanel(QGroupBox):
 
 
 class Client(QWidget):
-    def __init__(self, model):
-        QWidget.__init__(self)
+    def __init__(self, model, parent=None):
+        super(Client, self).__init__(parent)
         self.model = model
 
         self.setWindowTitle("Forum")
@@ -212,6 +218,7 @@ class Authentication(QDialog):
 
         self.login = QLineEdit()
         self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.Password)
 
         sign_in = QPushButton("Sign in")
         sign_up = QPushButton("Sign up")
@@ -233,22 +240,15 @@ class Authentication(QDialog):
         form_layout.addRow(vbox)
         self.setLayout(form_layout)
 
-    def setStatus(self, text: str):
-        self.status.show()
-        self.status.setText(text)
-
-    def _sign_in_up(self, func, status_error: str):
-        try:
-            status = func(self.login.text(), self.password.text())
-            if status != Status.OK:
-                setStatus(status_error)
-            else:
-                self.close()
-        except Exception as e:
-            self.setStatus(str(e))
+    def setStatus(self, text=""):
+        if len(text) == 0:
+            self.status.hide()
+        else:
+            self.status.show()
+            self.status.setText(text)
 
     def sign_in(self):
-        self._sign_in_up(self.model.authenticate, "Invalid login or password")
+        self.model.authenticate(self.login.text(), self.password.text())
 
     def sign_up(self):
-        self._sign_in_up(self.model.register, "Cannot register")
+        self.model.register(self.login.text(), self.password.text())

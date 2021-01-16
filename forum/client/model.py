@@ -1,40 +1,58 @@
-import enum
-import threading
 import time
 
 from typing import List
 
 from forum.client.connection import ServerConnection
-from forum.client.gui import Client, Message, Topic
+from forum.client.gui import Client, Authentication, Message, Topic, TopicPanel
 from forum.common.packet import PacketHeader, PacketData, PacketType, Status, DataType
+from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.Qt import Qt
+from pdb import *
 
 
-class Model:
-    def __init__(self, ip: str, port: int, timeout_sec=0.5):
+class Model(QObject):
+    new_topic = pyqtSignal(int, PacketData)
+    new_message = pyqtSignal(int, PacketData)
+    clear_message = pyqtSignal()
+
+    def __init__(self, ip: str, port: int, timeout_sec=0.5, parent=None):
+        super(Model, self).__init__(parent)
         self.gui = Client(self)
-        self._ip = ip
-        self._port = port
+        self.authentication = Authentication(self)
+        self.authentication.show()
+
         self.cid = 0
         self.tid = 0
         self.timeout = timeout_sec
 
-        self.connection = ServerConnection()
+        self.connection = ServerConnection(ip, port)
         self.connection.add_incoming_packet_handler(self._on_incoming_packet)
         self.connection.add_disconnect_handler(self._on_client_disconnected)
         self.connection.add_connection_handler(self._on_client_connected)
         self.connection.add_error_handler(self._on_connection_error)
         self.connection.start()
 
+        self.new_topic.connect(
+            self.gui.topic_panel.new_topic, Qt.BlockingQueuedConnection)
+        self.new_message.connect(
+            self.gui.topic_panel.message_panel.show_message, Qt.BlockingQueuedConnection)
+        self.clear_message.connect(
+            self.gui.topic_panel.message_panel.text_edit.clear, Qt.BlockingQueuedConnection)
+
     def _on_client_connected(self):
-        self.request_topics()
-        self.request_users()
-        self.events.add_socket(self.connection.sock)
+        print("connected")
+        self.authentication.setStatus()
+        self.gui.setStatus()
+        if self.is_user_entered():
+            self.request_topics()
+            self.request_users()
 
     def _on_client_disconnected(self):
-        self.connection.connect()
+        print("disconnected")
 
     def _on_connection_error(self, description: str):
         self.gui.setStatus(description)
+        self.authentication.setStatus(description)
 
     def _get_header(self, ptype: PacketType) -> PacketHeader:
         return PacketHeader(ptype=ptype, cid=self.cid, source=0)
@@ -56,6 +74,7 @@ class Model:
             PacketType.AUTHENTICATION, login, passwd)
 
     def _on_incoming_packet(self, packet: PacketHeader):
+        print("RECEIVE", packet)
         handler = {PacketType.REGISTRATION: self._on_authentication_answer,
                    PacketType.AUTHENTICATION: self._on_authentication_answer,
                    PacketType.GET_TOPICS: self._on_receive_topics,
@@ -66,17 +85,25 @@ class Model:
         handler(packet)
 
     def _on_receive_topics(self, packet: PacketHeader):
-        topic_panel = self.gui.topic_panel
+        size = len(self.gui.topic_panel)
         for i, data in enumerate(packet.data):
-            topic = Topic(len(self.gui.topic_panel) + i, data)
-            topic_panel.show_topic(topic)
+            if data.type == DataType.STATUS:
+                if data.getStatus() != Status.OK:
+                    self.gui.setStatus("Cannot create topic")
+            else:
+                self.new_topic.emit(size + i, data)
 
     def _on_receive_messages(self, packet: PacketHeader):
+        size = len(self.gui.topic_panel)
         if self.tid == packet.tid:
             for i, data in enumerate(packet.data):
-                message = Message(
-                    len(self.gui.topic_panel.message_panel) + i, data)
-                self.gui.topic_panel.message_panel.show_message(message)
+                if data.type == DataType.STATUS:
+                    if data.getStatus() == Status.OK:
+                        self.clear_message.emit()
+                    else:
+                        self.gui.setStatus("Cannot send message")
+                else:
+                    self.new_message.emit(size + i, data)
 
     def _on_receive_users(self, packet: PacketHeader):
         for data in packet.data:
@@ -84,11 +111,18 @@ class Model:
 
     def _on_authentication_answer(self, packet: PacketHeader):
         if len(packet.data) != 0:
-            status = packet.data[-1].tft
+            status = packet.data[-1].getStatus()
             if status == Status.OK:
                 self.cid = packet.cid
                 self.gui.show()
-                self.working = True
+                self.authentication.close()
+                self.request_topics()
+                self.request_users()
+            else:
+                if packet.type == PacketType.REGISTRATION:
+                    self.authentication.setStatus("Cannot register")
+                elif packet.type == PacketType.AUTHENTICATION:
+                    self.authentication.setStatus("Cannot authenticate")
 
     def request_topics(self, t_from=0, t_to=2**32-1):
         self.gui.topic_panel.clear_topics()
@@ -107,7 +141,7 @@ class Model:
         self.connection.send(packet)
 
     def request_users(self):
-        packet = self._get_header(6)
+        packet = self._get_header(PacketType.GET_USERS)
         self.connection.send(packet)
 
     def add_topic(self, name: str):

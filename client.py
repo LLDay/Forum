@@ -1,11 +1,12 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from forum.client import Model, Authentication
+from forum.client import Model
+from socket import *
 import argparse
 
 
 def parse_arguments():
-    default_ip = '127.0.0.1'
+    default_ip = '25.42.9.199'
     default_port = 1200
     parser = argparse.ArgumentParser(description="Forum client")
     parser.add_argument('-i', '--ip', type=str, metavar='address',
@@ -17,13 +18,8 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-    print(args)
     app = QApplication([])
     model = Model(args.ip, args.port)
-
-    window = Authentication(model)
-    window.show()
-
     sys.exit(app.exec_())
 
 

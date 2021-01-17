@@ -1,13 +1,6 @@
-import enum
-import select
-import threading
 import time
-import datetime
 from socket import *
-from typing import List
-
-from forum.client.gui import Client, Message, Topic
-from forum.common.packet import PacketHeader, PacketData, PacketType, Status, DataType
+from forum.common.packet import *
 
 class Model:
     def __init__(self, clientSocket, packet: PacketHeader, cid, permission: bool, authors=[], topics=[], messages=[], users=[], tid=-1, usersToCids={}, usersToTids={}):
@@ -65,12 +58,6 @@ class Model:
         self.packet.data.clear()
         for author, array_item in zip(self.authors, array):
             self.packet.data.append(PacketData(dtype=DataType.STRING, time=int(time.time()), s1=author, s2=array_item))
-        #number_from = self.packet.data[0].r_from
-        #number_to = self.packet.data[0].r_to
-        #self.packet.data.clear()
-        #for number in range(number_from, number_to):
-        #    if (number > 0 and len(array)-1 < number):
-        #            self.packet.data.append(PacketData(dtype=DataType.STRING, s1=self.authors[number], s2=array[number]))
 
     def _on_add_topics(self):
         self.packet.tid = self.tid
@@ -89,9 +76,6 @@ class Model:
         print("sended: ", self.packet)
         self.client_socket.send(self.packet.raw())
 
-        #    for client_socket in self.clients:
-        #        if (self.users_to_cids[self.clients[client_socket]] == self.cid):
-        #            client_socket.send(self.packet.row())
         if self.packet.type == PacketType.ADD_TOPIC:
             self.packet.type = PacketType.GET_TOPICS
             print("array: ", self.topics)

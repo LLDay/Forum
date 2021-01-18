@@ -10,14 +10,15 @@ def parse_arguments():
     default_port = 1200
     parser = argparse.ArgumentParser(description="Forum client")
     parser.add_argument('-i', '--ip', type=str, metavar='address',
-                        nargs=1, default=default_ip, help=f'specify ip address (default: {default_ip})')
+                        default=default_ip, help=f'specify ip address (default: {default_ip})')
     parser.add_argument('-p', '--port', type=int, metavar='port',
-                        nargs=1, default=default_port, help=f'specify port number (default: {default_port})')
+                        default=default_port, help=f'specify port number (default: {default_port})')
     return parser.parse_args()
 
 
 def main():
     args = parse_arguments()
+    print(args.ip)
     app = QApplication([])
     model = Model(args.ip, args.port)
     sys.exit(app.exec_())
